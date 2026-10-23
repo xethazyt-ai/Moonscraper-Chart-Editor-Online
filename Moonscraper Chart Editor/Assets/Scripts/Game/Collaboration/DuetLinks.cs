@@ -18,6 +18,9 @@ public interface IDuetLink
     string closeReason { get; }
 
     void Send(Dictionary<string, object> message);
+
+    // Bytes sent but not yet on their way, so big transfers can wait instead of piling up ahead of edits
+    long queuedBytes { get; }
     bool TryReceive(out Dictionary<string, object> message);
     void Close(string reason = "Disconnected");
 
@@ -60,11 +63,72 @@ public interface IDuetRoomProvider
     IDuetConnector JoinRoom(string roomCode);
 }
 
+/// <summary>
+/// A Windows pop-up (the save prompt, a file window) freezes Moonscraper until it's closed. Online rooms need ticking
+/// to stay connected, so while one is open this ticks them from a background thread instead, and nobody is dropped.
+/// </summary>
+public static class DuetKeepAlive
+{
+    const int TickIntervalMs = 30;
+
+    public static Action tick;      // Set by the online rooms provider. Always called under tickLock.
+    public static readonly object tickLock = new object();
+
+    // Wrap a call that blocks the main thread: using (DuetKeepAlive.WhileBlocked()) { ... }
+    public static IDisposable WhileBlocked()
+    {
+        return new Scope();
+    }
+
+    class Scope : IDisposable
+    {
+        volatile bool m_done = false;
+
+        public Scope()
+        {
+            if (tick != null)
+                new Thread(Loop) { IsBackground = true, Name = "Duet keep alive" }.Start();
+        }
+
+        void Loop()
+        {
+            while (!m_done)
+            {
+                Thread.Sleep(TickIntervalMs);
+                lock (tickLock)
+                {
+                    if (m_done)
+                        return;
+
+                    Action current = tick;
+                    try
+                    {
+                        if (current != null)
+                            current();
+                    }
+                    catch (Exception e)
+                    {
+                        UnityEngine.Debug.LogWarning("Duet: keeping the connection alive failed: " + e.Message);
+                    }
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            m_done = true;
+            lock (tickLock) { }     // Wait for a tick in progress, so the main thread has it to itself again
+        }
+    }
+}
+
 public static class DuetRooms
 {
     public static IDuetRoomProvider provider;
 
     public static bool isAvailable { get { return provider != null; } }
+
+    public const int MaxMembers = 64;   // The most Epic allows in a lobby, counting the host
 
     // Room codes are typed by hand, so accept lowercase, spaces and dashes
     public static string NormalizeCode(string code)

@@ -18,6 +18,9 @@ public static class Program
         Console.WriteLine("== Cursors and song details");
         failures += PresenceTests.Run();
 
+        Console.WriteLine("== Song files");
+        failures += FileTests.Run();
+
         Console.WriteLine(failures == 0 ? "All checks passed." : failures + " check(s) failed.");
         return failures == 0 ? 0 : 1;
     }

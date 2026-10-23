@@ -27,17 +27,20 @@ public static class FileExplorer  {
 
     public static bool OpenFilePanel(ExtensionFilter filter, string defExt, out string resultPath)
     {
-        return m_platformWrapper.OpenFilePanel(filter, defExt, out resultPath);
+        using (DuetKeepAlive.WhileBlocked())     // Moonscraper freezes until the window is closed
+            return m_platformWrapper.OpenFilePanel(filter, defExt, out resultPath);
     }
 
     public static bool SaveFilePanel(ExtensionFilter filter, string defaultFileName, string defExt, out string resultPath)
     {
-        return m_platformWrapper.SaveFilePanel(filter, defaultFileName, defExt, out resultPath);
+        using (DuetKeepAlive.WhileBlocked())
+            return m_platformWrapper.SaveFilePanel(filter, defaultFileName, defExt, out resultPath);
     }
 
     public static bool OpenFolderPanel(out string resultPath)
     {
-        return m_platformWrapper.OpenFolderPanel(out resultPath);
+        using (DuetKeepAlive.WhileBlocked())
+            return m_platformWrapper.OpenFolderPanel(out resultPath);
     }
 
     public static string StripIllegalChars(string filename)

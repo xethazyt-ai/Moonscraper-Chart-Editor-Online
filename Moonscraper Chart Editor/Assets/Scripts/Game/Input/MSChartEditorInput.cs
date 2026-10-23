@@ -146,6 +146,10 @@ public enum MSChartEditorInputActions
 
     Whammy,
     StartGameplay,
+
+    // Duet Mode
+    DuetToggleWindow,
+    DuetChat,
 }
 
 public static class MSChartEditorInput

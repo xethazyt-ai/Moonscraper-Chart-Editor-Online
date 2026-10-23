@@ -16,6 +16,9 @@ public class AutoSaveSystem : SystemManagerState.System
 
     public override void SystemUpdate()
     {
+        if (DuetPanel.isGuest)
+            return;     // The chart is the Duet session host's, so it isn't kept here
+
         if (currentAutosaveTask == null || currentAutosaveTask.Status != TaskStatus.RanToCompletion)
         {
             autosaveTimer += Time.deltaTime;

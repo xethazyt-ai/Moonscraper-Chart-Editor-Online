@@ -11,7 +11,8 @@ namespace UnityEngine
     public class Object { public static implicit operator bool(Object o) { return o != null; } }
     public class Component : Object { public GameObject gameObject; }
     public class Behaviour : Component { public bool enabled; }
-    public class MonoBehaviour : Behaviour { }
+    public class MonoBehaviour : Behaviour { public Coroutine StartCoroutine(System.Collections.IEnumerator routine) { return null; } }
+    public class Coroutine { }
     public class GameObject : Object { public void SetActive(bool active) { } }
     public class TextAsset : Object { public string text; public string name; }
     public struct Color
@@ -21,6 +22,11 @@ namespace UnityEngine
         public static Color white { get { return new Color(1, 1, 1); } }
     }
     public enum KeyCode { F9, F10 }
+    public static class ColorUtility
+    {
+        public static string ToHtmlStringRGB(Color c) { return ((int)System.Math.Round(c.r * 255)).ToString("X2") + ((int)System.Math.Round(c.g * 255)).ToString("X2") + ((int)System.Math.Round(c.b * 255)).ToString("X2"); }
+        public static bool TryParseHtmlString(string s, out Color c) { c = new Color(0, 0, 0); return false; }
+    }
 
     public static class Debug
     {
@@ -60,7 +66,7 @@ namespace UnityEngine
         public static bool GetMouseButtonDown(int button) { return false; }
     }
 
-    public static class Application { public static string persistentDataPath = System.IO.Path.GetTempPath(); }
+    public static class Application { public static string persistentDataPath = System.IO.Path.GetTempPath(); public static string dataPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "duet-app", "Data"); }
 
     // Just enough of Unity's immediate-mode GUI for the Duet panel to compile
     public struct Vector2 { public float x, y; public Vector2(float x, float y) { this.x = x; this.y = y; } }
@@ -79,11 +85,15 @@ namespace UnityEngine
     public static class GUIUtility { public static int keyboardControl; public static string systemCopyBuffer; }
     public class GUIStyle { }
     public class GUISkin { public GUIStyle button = new GUIStyle(); }
-    public static class GUI { public delegate void WindowFunction(int id); public static GUISkin skin = new GUISkin(); public static Matrix4x4 matrix; public static Color backgroundColor; public static void DragWindow() { } }
+    public static class GUI { public delegate void WindowFunction(int id); public static GUISkin skin = new GUISkin(); public static Matrix4x4 matrix; public static Color backgroundColor; public static void DragWindow() { } public static Rect ModalWindow(int id, Rect rect, WindowFunction func, string text) { return rect; } }
     public static class GUILayout
     {
         public static Rect Window(int id, Rect rect, GUI.WindowFunction func, string text) { return rect; }
-        public static void Label(string text) { }
+        public static void FlexibleSpace() { }
+        public static void BeginArea(Rect rect) { }
+        public static void EndArea() { }
+        public static void Label(string text, params GUILayoutOption[] options) { }
+        public static float HorizontalSlider(float value, float left, float right) { return value; }
         public static string TextField(string text, int maxLength) { return text; }
         public static bool Button(string text, params GUILayoutOption[] options) { return false; }
         public static bool Toggle(bool value, string text, GUIStyle style, params GUILayoutOption[] options) { return value; }
@@ -141,7 +151,8 @@ public class SelectedObjectsManager
 
 public class SongObjectPoolManager { public void SetAllPoolsDirty() { } }
 public class LoadingTasksManager { public bool isRunningTask; }
-public class Services { public LoadingTasksManager loadingTasksManager = new LoadingTasksManager(); }
+public class DropdownNotification { public void PushNotification(string message, float displayTime = 3, bool cancelable = false) { } }
+public class Services { public LoadingTasksManager loadingTasksManager = new LoadingTasksManager(); public DropdownNotification notificationBar = new DropdownNotification(); }
 public static class FileExplorer { public static bool OpenFolderPanel(out string path) { path = null; return false; } }
 public class ErrorManager { public void QueueErrorMessage(string message) { System.Console.WriteLine("MESSAGE: " + message); } }
 public class EditorObjectToolManager { public enum ToolID { Note } public ToolID currentToolId; }
@@ -150,6 +161,11 @@ public class ChartEditor : UnityEngine.MonoBehaviour
 {
     public static ChartEditor Instance;
     public static bool isDirty;
+    public bool isSaving;
+    public bool _Save() { return true; }
+    public void QuitAfterDuetPrompt() { }
+    public enum State { Editor, Playing, Menu }
+    public State currentState;
 
     public Song currentSong;
     public Chart currentChart;
@@ -166,6 +182,8 @@ public class ChartEditor : UnityEngine.MonoBehaviour
     public bool EditCheck() { return true; }
     public void LoadCollaborationSong(Song song, bool reloadAudio, bool keepView) { currentSong = song; }
     public void UnloadCollaborationSong() { currentSong = new Song(); }
+    public string currentChartFile = string.Empty;
+    public void ReloadAudio() { }
 
     public void FillUndoRedoSnapInfo(uint tick, Globals.ViewMode viewMode) { }
     public static float TimeToWorldYPosition(float time) { return time; }
@@ -183,4 +201,30 @@ public static class NativeMessageBox
     public enum Type { OK }
     public enum Result { OK = 1 }
     public static Result Show(string text, string caption, Type type, NativeWindow childWindow) { System.Console.WriteLine(caption + ": " + text); return Result.OK; }
+}
+
+// The chat box is drawn by the editor; the tests only need what DuetPanel asks of it
+public static class DuetChat
+{
+    public static bool isTyping { get { return false; } }
+    public static bool IsPointerOver() { return false; }
+}
+
+public static class DuetMenuCover
+{
+    public static bool Covers(UnityEngine.Rect guiRect, float scale) { return false; }
+}
+
+// The real window is drawn by the editor; the tests only need what DuetPanel asks of it
+public class DuetWindow
+{
+    public UnityEngine.Rect rect;
+    public DuetWindow(int id, string prefKey, UnityEngine.Rect initial, UnityEngine.Vector2 minSize, bool fixedHeight, bool scrollWhenSized) { rect = initial; }
+    public void Draw(string title, UnityEngine.GUI.WindowFunction content, float scale) { }
+}
+
+public enum MSChartEditorInputActions { DuetToggleWindow, DuetChat }
+public static class MSChartEditorInput
+{
+    public static bool GetInputDown(MSChartEditorInputActions action, bool allowedDuringRebind = false) { return false; }
 }

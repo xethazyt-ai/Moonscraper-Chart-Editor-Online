@@ -7,22 +7,20 @@ using MoonscraperChartEditor.Song;
 /// <summary>
 /// Shows everyone else in a Duet session: their mouse cursor with their name, their ghost note on the highway, and a
 /// marker beside the song bar on the right for where each person is. Also sends where you are.
-/// Drawn on top of the editor, so the editor's own UI is unchanged.
+/// Cursors and markers are drawn on top of the editor; ghost notes are drawn on the highway like real notes.
 /// </summary>
 public class DuetOverlay : MonoBehaviour
 {
-    const float GhostAlpha = 0.55f;
     const float MarkerSize = 12;
 
     ChartEditor m_editor;
     TimelineHandler m_timeline;
     readonly List<PlaceNote> m_placeNotes = new List<PlaceNote>();
     DuetPresence m_localPresence;
+    DuetGhostNotes m_ghostNotes;
 
     Texture2D m_arrow;
-    Texture2D m_disc;
     Texture2D m_marker;
-    Texture2D m_white;
     GUIStyle m_tagStyle;
 
     void Start()
@@ -38,14 +36,29 @@ public class DuetOverlay : MonoBehaviour
         }
 
         m_arrow = MakeArrowTexture(24, 34);
-        m_disc = MakeDiscTexture(64);
         m_marker = MakeMarkerTexture(32);
-        m_white = Texture2D.whiteTexture;
+
+        GameObject template = null;
+        foreach (PlaceNote placeNote in m_placeNotes)
+        {
+            NoteController controller = placeNote.GetComponent<NoteController>();
+            if (controller != null && controller.noteObjectSelector != null)
+            {
+                template = placeNote.gameObject;
+                break;
+            }
+        }
+        if (template != null)
+            m_ghostNotes = new DuetGhostNotes(template);
+        else
+            Debug.LogWarning("Duet: couldn't find the note tool, so other people's ghost notes won't show");
     }
 
     void OnDestroy()
     {
         DuetEditorSong.onRemoteSongInfoApplied -= OnRemoteSongInfoApplied;
+        if (m_ghostNotes != null)
+            m_ghostNotes.Destroy();
     }
 
     void OnRemoteSongInfoApplied()
@@ -60,11 +73,34 @@ public class DuetOverlay : MonoBehaviour
         if (session == null || session.state != DuetSession.State.Connected)
         {
             m_localPresence = null;
+            if (m_ghostNotes != null)
+                m_ghostNotes.HideAll();
             return;
         }
 
         m_localPresence = ReadLocalPresence();
         session.SetLocalPresence(m_localPresence);
+        ShowGhostNotes(session);
+    }
+
+    void ShowGhostNotes(DuetSession session)
+    {
+        if (m_ghostNotes == null)
+            return;
+
+        m_ghostNotes.Begin();
+        if (DuetPanel.showGhostNotes && m_editor.currentState == ChartEditor.State.Editor && m_editor.currentSong != null && m_editor.currentChart != null)
+        {
+            foreach (KeyValuePair<int, DuetPresence> pair in session.presences)
+            {
+                if (!m_localPresence.IsOnSameChart(pair.Value))
+                    continue;
+
+                foreach (DuetPresence.Ghost ghost in pair.Value.ghosts)
+                    m_ghostNotes.Show(ghost);
+            }
+        }
+        m_ghostNotes.End();
     }
 
     DuetPresence ReadLocalPresence()
@@ -74,6 +110,7 @@ public class DuetOverlay : MonoBehaviour
         presence.viewTick = m_editor.currentTickPos;
         presence.instrument = MenuBar.currentInstrument.ToString();
         presence.difficulty = MenuBar.currentDifficulty.ToString();
+        presence.isTyping = DuetChat.isTyping;
 
         Vector2? mouse = m_editor.services.mouseMonitorSystem.world2DPosition;
         if (mouse != null && m_editor.currentState == ChartEditor.State.Editor)
@@ -88,7 +125,7 @@ public class DuetOverlay : MonoBehaviour
                 foreach (PlaceNote placeNote in m_placeNotes)
                 {
                     if (placeNote != null && placeNote.gameObject.activeInHierarchy && placeNote.note != null)
-                        presence.ghosts.Add(new DuetPresence.Ghost { x = placeNote.transform.position.x, tick = placeNote.note.tick, isOpen = placeNote.note.IsOpenNote() });
+                        presence.ghosts.Add(new DuetPresence.Ghost { tick = placeNote.note.tick, rawNote = placeNote.note.rawNote, flags = (int)placeNote.note.flags });
                 }
             }
         }
@@ -99,7 +136,7 @@ public class DuetOverlay : MonoBehaviour
     void OnGUI()
     {
         DuetSession session = DuetPanel.activeSession;
-        if (session == null || session.state != DuetSession.State.Connected || UnityEngine.Event.current.type != EventType.Repaint)
+        if (session == null || session.state != DuetSession.State.Connected || UnityEngine.Event.current.type != EventType.Repaint || DuetPanel.isHudHidden)
             return;
 
         GUI.depth = 10;     // Behind the Duet window
@@ -117,12 +154,6 @@ public class DuetOverlay : MonoBehaviour
             DuetUser user = session.users.Find(u => u.id == pair.Key);
             string name = user != null ? user.name : "Someone";
             bool sameChart = m_localPresence == null || m_localPresence.IsOnSameChart(presence);
-
-            if (sameChart && DuetPanel.showGhostNotes)
-            {
-                foreach (DuetPresence.Ghost ghost in presence.ghosts)
-                    DrawGhost(camera, ghost, DuetPresence.GetColor(presence.color));
-            }
 
             if (presence.hasPointer)
                 DrawPointer(camera, presence, sameChart ? name : name + " (" + presence.difficulty + " " + presence.instrument + ")");
@@ -150,42 +181,19 @@ public class DuetOverlay : MonoBehaviour
         float scale = Mathf.Max(1f, Screen.height / 1080f);
         Color color = DuetPresence.GetColor(presence.color);
 
-        GUI.color = color;
-        GUI.DrawTexture(new Rect(tip.x, tip.y, m_arrow.width * scale * 0.75f, m_arrow.height * scale * 0.75f), m_arrow);
-
         GUIContent content = new GUIContent(label);
         Vector2 size = m_tagStyle.CalcSize(content);
+        Rect arrowRect = new Rect(tip.x, tip.y, m_arrow.width * scale * 0.75f, m_arrow.height * scale * 0.75f);
+        Rect tagRect = new Rect(tip.x + 16 * scale, tip.y + 20 * scale, size.x, size.y);
+        if (DuetMenuCover.Covers(arrowRect) || DuetMenuCover.Covers(tagRect))
+            return;     // Behind an open Moonscraper menu
+
+        GUI.color = color;
+        GUI.DrawTexture(arrowRect, m_arrow);
+
         m_tagStyle.normal.textColor = color;
         GUI.color = Color.white;
-        GUI.Label(new Rect(tip.x + 16 * scale, tip.y + 20 * scale, size.x, size.y), content, m_tagStyle);
-    }
-
-    void DrawGhost(Camera camera, DuetPresence.Ghost ghost, Color color)
-    {
-        Vector2 centre;
-        if (!HighwayToGui(camera, ghost.x, ghost.tick, out centre))
-            return;
-
-        // Size it like a real note: about one lane wide on this screen
-        float laneSpacing = Mathf.Abs(m_editor.laneInfo.GetLanePosition(1, false) - m_editor.laneInfo.GetLanePosition(0, false));
-        Vector2 left, right;
-        HighwayToGui(camera, ghost.x - laneSpacing * 0.5f, ghost.tick, out left);
-        HighwayToGui(camera, ghost.x + laneSpacing * 0.5f, ghost.tick, out right);
-        float laneWidth = Mathf.Abs(right.x - left.x);
-
-        color.a = GhostAlpha;
-        GUI.color = color;
-        if (ghost.isOpen)
-        {
-            // Open notes are a bar across the whole highway
-            float width = laneWidth * Mathf.Max(1, m_editor.laneInfo.laneCount);
-            GUI.DrawTexture(new Rect(centre.x - width / 2, centre.y - laneWidth * 0.12f, width, laneWidth * 0.24f), m_white);
-        }
-        else
-        {
-            float size = laneWidth * 0.8f;
-            GUI.DrawTexture(new Rect(centre.x - size / 2, centre.y - size / 2, size, size), m_disc);
-        }
+        GUI.Label(tagRect, content, m_tagStyle);
     }
 
     void DrawSongBarMarkers(DuetSession session)
@@ -223,6 +231,9 @@ public class DuetOverlay : MonoBehaviour
             float fraction = Mathf.Clamp01(song.TickToTime(person.Value.viewTick, song.resolution) / m_editor.currentSongLength);
             float screenY = Mathf.Lerp(bottomRight.y, topRight.y, fraction);
             Rect rect = new Rect(Mathf.Min(bottomRight.x + 2 * scale, Screen.width - size), Screen.height - screenY - size / 2, size, size);
+
+            if (DuetMenuCover.Covers(rect))
+                continue;
 
             GUI.color = DuetPresence.GetColor(person.Value.color);
             GUI.DrawTexture(rect, m_marker);
@@ -290,24 +301,6 @@ public class DuetOverlay : MonoBehaviour
                     pixel = edge ? new Color(0.05f, 0.05f, 0.05f, 1) : Color.white;
                 }
                 texture.SetPixel(x, height - 1 - y, pixel);     // Texture rows go bottom to top
-            }
-        }
-        texture.Apply();
-        return texture;
-    }
-
-    static Texture2D MakeDiscTexture(int size)
-    {
-        Texture2D texture = NewTexture(size, size);
-        float radius = size / 2f;
-        for (int x = 0; x < size; ++x)
-        {
-            for (int y = 0; y < size; ++y)
-            {
-                float distance = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(radius, radius));
-                float alpha = Mathf.Clamp01(radius - distance);
-                bool rim = distance > radius * 0.8f;
-                texture.SetPixel(x, y, rim ? new Color(1, 1, 1, alpha) : new Color(1, 1, 1, alpha * 0.6f));
             }
         }
         texture.Apply();

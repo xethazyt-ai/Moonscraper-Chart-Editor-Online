@@ -1110,6 +1110,28 @@
                 "category": 0,
                 "allowSameFrameMultiInput": false
             }
+        },
+        {
+            "mSChartEditorInputAction": "DuetToggleWindow",
+            "properties": {
+                "displayName": "Duet Mode Window",
+                "rebindable": true,
+                "hiddenInLists": false,
+                "anyDirectionAxis": false,
+                "category": 0,
+                "allowSameFrameMultiInput": false
+            }
+        },
+        {
+            "mSChartEditorInputAction": "DuetChat",
+            "properties": {
+                "displayName": "Duet Mode Chat",
+                "rebindable": true,
+                "hiddenInLists": false,
+                "anyDirectionAxis": false,
+                "category": 1,
+                "allowSameFrameMultiInput": false
+            }
         }
     ]
 }

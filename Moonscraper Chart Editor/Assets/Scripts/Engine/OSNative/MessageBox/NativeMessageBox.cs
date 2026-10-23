@@ -41,6 +41,7 @@ public static class NativeMessageBox {
 
     public static Result Show(string text, string caption, Type messageBoxType, NativeWindow childWindow)
     {
-        return m_platformWrapper.Show(text, caption, messageBoxType, childWindow);
+        using (DuetKeepAlive.WhileBlocked())     // Moonscraper freezes until it's answered
+            return m_platformWrapper.Show(text, caption, messageBoxType, childWindow);
     }
 }

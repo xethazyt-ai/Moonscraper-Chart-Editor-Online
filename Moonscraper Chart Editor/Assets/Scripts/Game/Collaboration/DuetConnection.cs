@@ -19,11 +19,13 @@ public class DuetConnection : IDuetLink
     readonly ConcurrentQueue<Dictionary<string, object>> m_incoming = new ConcurrentQueue<Dictionary<string, object>>();
     readonly BlockingCollection<byte[]> m_outgoing = new BlockingCollection<byte[]>();
     volatile bool m_closed = false;
+    long m_queuedBytes = 0;
 
     public int id { get; set; }
     public string remoteAddress { get; private set; }
     public bool isClosed { get { return m_closed; } }
     public string closeReason { get; private set; }
+    public long queuedBytes { get { return Interlocked.Read(ref m_queuedBytes); } }
 
     public DuetConnection(TcpClient client)
     {
@@ -58,6 +60,7 @@ public class DuetConnection : IDuetLink
 
         try
         {
+            Interlocked.Add(ref m_queuedBytes, frame.Length);
             m_outgoing.Add(frame);
         }
         catch (InvalidOperationException)
@@ -141,6 +144,7 @@ public class DuetConnection : IDuetLink
             foreach (byte[] frame in m_outgoing.GetConsumingEnumerable())
             {
                 m_stream.Write(frame, 0, frame.Length);
+                Interlocked.Add(ref m_queuedBytes, -frame.Length);
             }
 
             m_stream.Flush();

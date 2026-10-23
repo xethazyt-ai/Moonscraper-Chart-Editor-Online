@@ -140,6 +140,10 @@ public class TimelineMovementController : MovementController
             if (Services.IsInDropDown)
                 scrollDelta = 0;
 
+            // Scrolling the Duet chat or window shouldn't move the song
+            if (DuetPanel.IsPointerOverPanel())
+                scrollDelta = 0;
+
             // Position changes scroll bar value
             if (scrollDelta != 0 || transform.position != prevPos || Services.HasScreenResized)
             {

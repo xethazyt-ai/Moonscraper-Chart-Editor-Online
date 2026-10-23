@@ -95,7 +95,7 @@ public class Services : MonoBehaviour
     {
         get
         {
-            return DuetPanel.isTyping || (EventSystem.current.currentSelectedGameObject != null &&
+            return DuetPanel.isTyping || DuetChat.isTyping || (EventSystem.current.currentSelectedGameObject != null &&
                 (EventSystem.current.currentSelectedGameObject.GetComponent<InputField>() != null ||
                 EventSystem.current.currentSelectedGameObject.GetComponent<TMPro.TMP_InputField>() != null ||
                 EventSystem.current.currentSelectedGameObject.GetComponent<MS_TMPro_InputField>() != null));

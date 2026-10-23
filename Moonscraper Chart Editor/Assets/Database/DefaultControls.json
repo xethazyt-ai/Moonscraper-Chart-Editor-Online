@@ -2302,6 +2302,56 @@
                 ],
                 "jsMaps": []
             }
+        },
+        {
+            "action": "DuetToggleWindow",
+            "input": {
+                "kbMaps": [
+                    {
+                        "modifiers": 0,
+                        "keys": [
+                            291
+                        ]
+                    },
+                    {
+                        "modifiers": 0,
+                        "keys": []
+                    }
+                ],
+                "gpButtonMaps": [
+                    {
+                        "buttons": [],
+                        "axes": []
+                    }
+                ],
+                "jsMaps": []
+            }
+        },
+        {
+            "action": "DuetChat",
+            "input": {
+                "kbMaps": [
+                    {
+                        "modifiers": 0,
+                        "keys": [
+                            13
+                        ]
+                    },
+                    {
+                        "modifiers": 0,
+                        "keys": [
+                            271
+                        ]
+                    }
+                ],
+                "gpButtonMaps": [
+                    {
+                        "buttons": [],
+                        "axes": []
+                    }
+                ],
+                "jsMaps": []
+            }
         }
     ]
 }

@@ -20,7 +20,7 @@ while IFS= read -r -d '' f; do FILES+=("$f"); done < <(
        "$SCRIPTS/Engine/Events" "$SCRIPTS/Engine/State Control" "$SCRIPTS/Game/Charts" \
        -name '*.cs' -not -path '*/Midi/*' -not -path '*/Collaboration/Views/*' -print0)
 FILES+=("$SCRIPTS/External/Advanced INI Parser/INIParser.cs" "$SCRIPTS/Game/Misc/ISongValidateReport.cs"
-        "$SCRIPTS/Engine/Logging/Logger.cs" "$OUT/EnumX.cs" "$HERE/UnityStubs.cs" "$HERE/ReplayTests.cs" "$HERE/SessionTests.cs" "$HERE/LinkTests.cs" "$HERE/PresenceTests.cs" "$HERE/Program.cs")
+        "$SCRIPTS/Engine/Logging/Logger.cs" "$OUT/EnumX.cs" "$HERE/UnityStubs.cs" "$HERE/ReplayTests.cs" "$HERE/SessionTests.cs" "$HERE/LinkTests.cs" "$HERE/PresenceTests.cs" "$HERE/FileTests.cs" "$HERE/Program.cs")
 
 mcs -out:"$OUT/DuetTests.exe" -langversion:latest -nowarn:0618,0649,0414,0219,0168 -define:APPLICATION_MOONSCRAPER "${FILES[@]}"
 cd "$OUT" && mono DuetTests.exe

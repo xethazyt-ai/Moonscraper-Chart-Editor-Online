@@ -66,6 +66,7 @@ public class ChartEditor : UnitySingleton<ChartEditor>
     public SongObjectPoolManager songObjectPoolManager { get { return _songObjectPoolManager; } }
 
     string lastLoadedFile = string.Empty;
+    public string currentChartFile { get { return lastLoadedFile; } }
     public WindowHandleManager windowHandleManager { get; private set; }
     [HideInInspector]
     public ErrorManager errorManager { get; private set; }
@@ -183,6 +184,7 @@ public class ChartEditor : UnitySingleton<ChartEditor>
         errorManager = gameObject.AddComponent<ErrorManager>();
         gameObject.AddComponent<DuetPanel>();
         gameObject.AddComponent<DuetOverlay>();
+        gameObject.AddComponent<DuetChat>();
         toolManager.Init();
         interactionMethodManager.Init();
 
@@ -318,6 +320,12 @@ public class ChartEditor : UnitySingleton<ChartEditor>
         }
     }
 
+    // The Duet quit prompt was answered with quit. Update then quits for real.
+    public void QuitAfterDuetPrompt()
+    {
+        quittingCheckPassed = true;
+    }
+
     public void ForceQuit()
     {
         quittingCheckPassed = true;
@@ -354,6 +362,10 @@ public class ChartEditor : UnitySingleton<ChartEditor>
 
     public bool EditCheck()
     {    
+        // Someone who joined a Duet session has nothing to save: the chart is the host's
+        if (DuetPanel.isGuest)
+            return true;
+
         // Check for unsaved changes
         if (isDirty)
         {
@@ -362,8 +374,7 @@ public class ChartEditor : UnitySingleton<ChartEditor>
 
             if (result == NativeMessageBox.Result.Yes)
             {
-                // Someone who joined a Duet session can only keep a copy of the host's chart
-                if (!(DuetPanel.isGuest ? _SaveAs() : _Save()))
+                if (!_Save())
                 {
                     return false;
                 }
@@ -389,6 +400,10 @@ public class ChartEditor : UnitySingleton<ChartEditor>
 
         if (quittingCheckPassed)
             return true;
+
+        // Ask inside the editor rather than with a Windows pop-up, which freezes Moonscraper and drops a Duet session
+        if (DuetPanel.RequestQuitConfirmation())
+            return false;
 
         if (haltThreadForQuit)
             return false;
@@ -681,11 +696,8 @@ public class ChartEditor : UnitySingleton<ChartEditor>
 
     public bool _Save()
     {
-        if (DuetPanel.isGuest)
-        {
-            services.notificationBar.PushNotification("ONLY THE HOST CAN SAVE THIS CHART. USE SAVE AS TO KEEP YOUR OWN COPY", 3, true);
+        if (BlockedSaveForDuetGuest())
             return false;
-        }
 
         if (lastLoadedFile != string.Empty)
         {
@@ -701,6 +713,9 @@ public class ChartEditor : UnitySingleton<ChartEditor>
 
     public bool _SaveAs(bool forced = true)
     {
+        if (BlockedSaveForDuetGuest())
+            return false;
+
         string defaultFileName;
 
         if (lastLoadedFile != string.Empty)
@@ -726,6 +741,16 @@ public class ChartEditor : UnitySingleton<ChartEditor>
 
         // User canceled
         return false;
+    }
+
+    // Only the host of a Duet session keeps the chart, and shares it once it's finished
+    public bool BlockedSaveForDuetGuest()
+    {
+        if (!DuetPanel.isGuest)
+            return false;
+
+        services.notificationBar.PushNotification("ONLY THE HOST CAN SAVE THIS CHART", 3, true);
+        return true;
     }
 
     void Save (string filename, ExportOptions exportOptions)

@@ -49,6 +49,11 @@ public static class SessionTests
                 ++resyncs;
         }
 
+        public List<string> sharedFiles = new List<string>();
+        public Dictionary<string, string> receivedFiles;
+        public List<string> GetSongFilePaths() { return sharedFiles; }
+        public void UseSongFiles(Dictionary<string, string> localPaths) { receivedFiles = new Dictionary<string, string>(localPaths); }
+
         public Dictionary<string, string> ReadSongInfo() { return DuetSongInfo.Read(song); }
         public void ApplySongInfo(Dictionary<string, string> info) { DuetSongInfo.Apply(song, info); }
 

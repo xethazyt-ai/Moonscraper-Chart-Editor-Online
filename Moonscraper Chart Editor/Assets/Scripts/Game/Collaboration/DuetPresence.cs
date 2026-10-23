@@ -10,11 +10,13 @@ using UnityEngine;
 /// </summary>
 public class DuetPresence
 {
+    // A note the person would place if they clicked now. Sent as the note itself, so everyone draws it with their own
+    // skin and lane layout, and works out strum or HOPO from their copy of the chart.
     public struct Ghost
     {
-        public float x;     // World position across the highway
         public uint tick;
-        public bool isOpen;
+        public int rawNote;
+        public int flags;   // Note.Flags, e.g. tap or forced
     }
 
     public int color;
@@ -27,6 +29,8 @@ public class DuetPresence
     public uint pointerTick;
 
     public List<Ghost> ghosts = new List<Ghost>();
+
+    public bool isTyping;   // Writing a chat message
 
     public static readonly string[] ColorNames = { "Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Pink" };
 
@@ -44,11 +48,39 @@ public class DuetPresence
 
     public static int ColorCount { get { return s_colors.Length; } }
 
-    public static Color GetColor(int index)
+    // A color is either one of the presets above, by its number, or any color at all: this flag plus 0xRRGGBB
+    public const int CustomColorFlag = 0x1000000;
+
+    public static bool IsCustomColor(int color) { return (color & CustomColorFlag) != 0; }
+
+    public static int MakeCustomColor(Color color)
     {
-        if (index < 0 || index >= s_colors.Length)
-            index = 0;
-        return s_colors[index];
+        int r = Mathf.Clamp(Mathf.RoundToInt(color.r * 255), 0, 255);
+        int g = Mathf.Clamp(Mathf.RoundToInt(color.g * 255), 0, 255);
+        int b = Mathf.Clamp(Mathf.RoundToInt(color.b * 255), 0, 255);
+        return CustomColorFlag | (r << 16) | (g << 8) | b;
+    }
+
+    public static Color GetColor(int color)
+    {
+        if (IsCustomColor(color))
+            return new Color(((color >> 16) & 0xFF) / 255f, ((color >> 8) & 0xFF) / 255f, (color & 0xFF) / 255f);
+
+        if (color < 0 || color >= s_colors.Length)
+            color = 0;
+        return s_colors[color];
+    }
+
+    public static string GetColorName(int color)
+    {
+        if (!IsCustomColor(color))
+            return ColorNames[color >= 0 && color < ColorNames.Length ? color : 0];
+        return "#" + (color & 0xFFFFFF).ToString("X6");
+    }
+
+    public static bool IsValidColor(int color)
+    {
+        return IsCustomColor(color) ? (color & ~(CustomColorFlag | 0xFFFFFF)) == 0 : color >= 0 && color < s_colors.Length;
     }
 
     public bool IsOnSameChart(DuetPresence other)
@@ -67,6 +99,9 @@ public class DuetPresence
             { "difficulty", difficulty },
         };
 
+        if (isTyping)
+            json["typing"] = true;
+
         if (hasPointer)
             json["pointer"] = new List<object> { (double)pointerX, (double)pointerTick };
 
@@ -74,7 +109,7 @@ public class DuetPresence
         {
             List<object> list = new List<object>();
             foreach (Ghost ghost in ghosts)
-                list.Add(new List<object> { (double)ghost.x, (double)ghost.tick, ghost.isOpen });
+                list.Add(new List<object> { (double)ghost.tick, (double)ghost.rawNote, (double)ghost.flags });
             json["ghosts"] = list;
         }
 
@@ -88,6 +123,9 @@ public class DuetPresence
         presence.viewTick = ToTick(DuetJson.GetNumber(json, "view"));
         presence.instrument = DuetJson.GetString(json, "instrument", string.Empty);
         presence.difficulty = DuetJson.GetString(json, "difficulty", string.Empty);
+
+        object typing;
+        presence.isTyping = json.TryGetValue("typing", out typing) && typing is bool && (bool)typing;
 
         List<object> pointer = DuetJson.GetArray(json, "pointer");
         if (pointer != null && pointer.Count >= 2 && pointer[0] is double && pointer[1] is double)
@@ -103,12 +141,19 @@ public class DuetPresence
             foreach (object item in ghosts)
             {
                 List<object> ghost = item as List<object>;
-                if (ghost != null && ghost.Count >= 3 && ghost[0] is double && ghost[1] is double)
-                    presence.ghosts.Add(new Ghost { x = (float)(double)ghost[0], tick = ToTick((double)ghost[1]), isOpen = ghost[2] is bool && (bool)ghost[2] });
+                if (ghost != null && ghost.Count >= 3 && ghost[0] is double && ghost[1] is double && ghost[2] is double)
+                    presence.ghosts.Add(new Ghost { tick = ToTick((double)ghost[0]), rawNote = ToSmallInt((double)ghost[1]), flags = ToSmallInt((double)ghost[2]) });
             }
         }
 
         return presence;
+    }
+
+    static int ToSmallInt(double value)
+    {
+        if (double.IsNaN(value) || value < 0 || value > ushort.MaxValue)
+            return 0;
+        return (int)value;
     }
 
     static uint ToTick(double value)

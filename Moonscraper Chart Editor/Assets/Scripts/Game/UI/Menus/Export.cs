@@ -56,9 +56,22 @@ public class Export : DisplayMenu {
         setAsChartFile();
     }
 
+    protected override void Update()
+    {
+        // Only the host of a Duet session keeps the chart, so joiners can't export it either
+        if (editor.BlockedSaveForDuetGuest())
+        {
+            Disable();
+            return;
+        }
+
+        base.Update();
+    }
+
     protected override void OnEnable()
     {
         base.OnEnable();
+
 
         fileTypeDropdown.value = 0;
 
@@ -97,6 +110,9 @@ public class Export : DisplayMenu {
 
     public void ExportSong()
     {
+        if (editor.BlockedSaveForDuetGuest())
+            return;
+
         if (chPackageToggle.isOn)
         {
             ExportCHPackage();
